@@ -1,6 +1,6 @@
 # シンプルなビデオ編集ツール UIコンセプト
 
-![UI Preview](https://rikiza.pythonanywhere.com/video-editor-jp/)  
+![UI Preview](./image/image.png)  
 *デモ画面イメージ*
 
 このリポジトリは、**レスポンシブレイアウト**と**Resizable機能**を備えた、ビデオ編集アプリケーションの**フロントエンドUIコンセプト**をデモンストレーションするために作成された単一のHTMLファイルです。
