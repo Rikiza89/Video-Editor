@@ -40,4 +40,4 @@
 
 1. このリポジトリをクローンまたはHTMLファイルをダウンロード:
    ```bash
-   git clone https://github.com/あなたのユーザー名/video-editor-ui-jp.git
+   git clone https://github.com/Rikiza89/Video-Editor.git
