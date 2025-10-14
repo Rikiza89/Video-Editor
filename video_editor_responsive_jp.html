@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <title>シンプルなビデオ編集ツール</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- jQuery UI for resizable -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+    <style>
+        body {
+            font-family: 'Roboto Mono', monospace;
+            background-color: #1a202c; /* ダークな背景色 */
+            color: #e2e8f0; /* 明るいテキスト色 */
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 2fr 1fr; /* 初期レイアウトの比率 */
+            flex-grow: 1;
+            padding: 1rem;
+            gap: 1rem;
+            max-width: 95%; /* ページの幅の95%に設定 */
+            margin: 0 auto; /* 中央に配置 */
+        }
+        .left-panel, .right-panel, .center-panel {
+            background-color: #2d3748; /* より暗いパネルの背景色 */
+            border-radius: 0.75rem; /* 角を丸くする */
+            padding: 1rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: auto; /* パネルが小さい場合にコンテンツをスクロール可能にする */
+            min-width: 200px; /* パネルの最小幅 */
+        }
+        .center-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            min-width: 400px;
+        }
+        .video-container {
+            position: relative;
+            width: 100%;
+            padding-bottom: 56.25%; /* 16:9のアスペクト比 */
+            background-color: #000;
+            border-radius: 0.75rem; /* 角を丸くする */
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .video-container video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain; /* ビデオがコンテナ内に収まるようにする */
+        }
+        .controls-timeline-area {
+            background-color: #2d3748; /* より暗いパネルの背景色 */
+            border-radius: 0.75rem; /* 角を丸くする */
+            padding: 1rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .button {
+            @apply px-4 py-2 rounded-lg font-semibold transition duration-200 ease-in-out;
+            background-image: linear-gradient(to right, #4c51bf, #6b46c1); /* 紫のグラデーション */
+            color: white;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .button:hover {
+            background-image: linear-gradient(to right, #6b46c1, #4c51bf);
+            transform: translateY(-2px);
+        }
+        .button:active {
+            transform: translateY(0);
+            box-shadow: none;
+        }
+        .timeline {
+            position: relative;
+            width: 100%;
+            height: 20px;
+            background-color: #4a5568; /* 灰色の背景 */
+            border-radius: 0.5rem;
+            margin-top: 1rem;
+            overflow: hidden;
+            cursor: pointer;
+        }
+        .timeline-progress {
+            height: 100%;
+            background-color: #63b3ed; /* 青色のプログレスバー */
+            width: 0%;
+            border-radius: 0.5rem;
+        }
+        .timeline-checkpoint {
+            position: absolute;
+            top: 0;
+            width: 4px; /* マーカーの幅 */
+            height: 100%;
+            background-color: #f6ad55; /* オレンジ色のマーカー */
+            border-radius: 1px;
+            transform: translateX(-50%); /* マーカーを中央に配置 */
+            box-shadow: 0 0 5px rgba(246, 173, 85, 0.7);
+            cursor: pointer;
+            z-index: 10;
+        }
+        .list-item {
+            @apply flex justify-between items-center py-2 px-3 rounded-md mb-2 cursor-pointer;
+            background-color: #4a5568;
+            transition: background-color 0.2s ease-in-out;
+        }
+        .list-item:hover {
+            background-color: #5a6578;
+        }
+        .list-item.selected {
+            background-color: #63b3ed; /* 選択されたアイテムの背景色 */
+            color: white;
+        }
+        .modal {
+            display: none; /* デフォルトで非表示 */
+            position: fixed; /* 所定の位置に留まる */
+            z-index: 1000; /* 最前面に表示 */
+            left: 0;
+            top: 0;
+            width: 100%; /* 全幅 */
+            height: 100%; /* 全高 */
+            overflow: auto; /* 必要に応じてスクロール可能にする */
+            background-color: rgba(0,0,0,0.7); /* 不透明度0.7の黒 */
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: #2d3748;
+            margin: auto;
+            padding: 20px;
+            border-radius: 0.75rem;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            width: 80%;
+            max-width: 500px;
+            text-align: center;
+        }
+        .modal-close-button {
+            @apply mt-4 px-6 py-2 rounded-lg font-semibold transition duration-200 ease-in-out;
+            background-color: #e53e3e; /* 赤色 */
+            color: white;
+        }
+        .modal-close-button:hover {
+            background-color: #c53030;
+        }
+
+        /* グラフ固有のスタイル */
+        .graph-container {
+            display: flex;
+            align-items: flex-end;
+            justify-content: flex-start; /* バーを先頭に揃える */
+            height: 150px; /* グラフエリアの固定高さ */
+            background-color: #4a5568;
+            border-radius: 0.5rem;
+            padding: 0.5rem;
+            gap: 0.5rem;
+            overflow-x: auto; /* バーが多い場合にスクロール可能にする */
+        }
+        .graph-bar {
+            background-color: #63b3ed; /* 青色のバー */
+            width: 30px; /* 各バーの固定幅 */
+            min-height: 5px; /* 値が小さい場合でもバーが見えるようにする */
+            border-radius: 0.25rem 0.25rem 0 0; /* 上部を丸くする */
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            align-items: center;
+            text-align: center;
+            font-size: 0.75rem;
+            color: white;
+            transition: height 0.3s ease-out;
+            flex-shrink: 0; /* バーが縮まないようにする */
+        }
+        .graph-bar-label {
+            position: absolute;
+            top: -1.5rem; /* バーの上に配置 */
+            left: 50%;
+            transform: translateX(-50%);
+            white-space: nowrap;
+            color: #e2e8f0;
+            font-weight: bold;
+        }
+        .graph-bar-value {
+            margin-top: 0.25rem;
+            margin-bottom: 0.25rem;
+            color: #e2e8f0;
+        }
+
+        /* 動作マトリックス表のスタイル */
+        #segment-matrix-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        #segment-matrix-table th, #segment-matrix-table td {
+            border: 1px solid #4a5568;
+            padding: 0.5rem;
+            text-align: left;
+        }
+        #segment-matrix-table thead th {
+            background-color: #4a5568;
+            color: #e2e8f0;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+        }
+        #segment-matrix-table tbody tr:nth-child(odd) {
+            background-color: #2d3748;
+        }
+        #segment-matrix-table tbody tr:nth-child(even) {
+            background-color: #1a202c;
+        }
+        #segment-matrix-table tbody tr:hover {
+            background-color: #4a5568;
+        }
+
+        /* サイズ変更可能な要素のスタイル */
+        .ui-resizable-handle {
+            background-color: rgba(100, 100, 100, 0.5); /* 半透明のハンドル */
+            position: absolute;
+            font-size: 0.1px;
+            display: block;
+            touch-action: none;
+        }
+        .ui-resizable-e {
+            cursor: ew-resize;
+            width: 7px;
+            right: -5px;
+            top: 0;
+            height: 100%;
+        }
+        .ui-resizable-w {
+            cursor: ew-resize;
+            width: 7px;
+            left: -5px;
+            top: 0;
+            height: 100%;
+        }
+        .ui-resizable-s {
+            cursor: ns-resize;
+            height: 7px;
+            width: 100%;
+            bottom: -5px;
+            left: 0;
+        }
+        .ui-resizable-n {
+            cursor: ns-resize;
+            height: 7px;
+            width: 100%;
+            top: -5px;
+            left: 0;
+        }
+
+
+        /* レスポンシブ調整 */
+        @media (max-width: 1024px) {
+            .main-content {
+                grid-template-columns: 1fr; /* 小さい画面ではパネルを縦に積む */
+            }
+            .left-panel, .right-panel, .center-panel {
+                width: 100%;
+                min-width: unset; /* モバイルでは最小幅を解除 */
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100">
+    <div class="container">
+        <header class="bg-gray-800 p-4 shadow-md rounded-b-xl">
+            <h1 class="text-3xl font-bold text-center text-indigo-400">シンプルなビデオ編集ツール</h1>
+        </header>
+
+        <div class="main-content">
+            <!-- 左パネル: フォルダブラウザ (シミュレートされたローカル) -->
+            <div class="left-panel resizable" id="left-panel">
+                <h2 class="text-xl font-semibold mb-4 text-indigo-300">利用可能なビデオ</h2>
+                <div class="mb-4">
+                    <label for="video-select" class="block text-sm font-medium text-gray-300 mb-2">サンプルビデオを選択:</label>
+                    <select id="video-select" class="w-full p-2 rounded-lg bg-gray-700 border border-gray-600 text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="">-- ビデオを選択 --</option>
+                        <option value="https://www.learningcontainer.com/wp-content/uploads/2020/05/sample-mp4-file.mp4">サンプルビデオ 1 (MP4)</option>
+                        <option value="https://www.learningcontainer.com/wp-content/uploads/2020/05/sample-avi-file.avi">サンプルビデオ 2 (AVI)</option>
+                        <option value="https://www.learningcontainer.com/wp-content/uploads/2020/05/sample-mov-file.mov">サンプルビデオ 3 (MOV)</option>
+                        <!-- ここにさらにビデオオプションを追加 -->
+                    </select>
+                </div>
+                <button id="load-video-btn" class="button w-full mb-6">サンプルビデオを読み込む</button>
+                <h2 class="text-xl font-semibold mb-4 text-indigo-300">ローカルビデオ</h2>
+                <div class="mb-4">
+                    <label for="local-video-input" class="block text-sm font-medium text-gray-300 mb-2">またはローカルフォルダから読み込む:</label>
+                    <input type="file" id="local-video-input" accept="video/*" class="w-full text-gray-100 p-2 rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700"/>
+                </div>
+
+
+                <div class="mb-4 mt-6">
+                    <label for="load-data-input" class="block text-sm font-medium text-gray-300 mb-2">.txtファイルからデータを読み込む:</label>
+                    <input type="file" id="load-data-input" accept=".txt" class="w-full text-gray-100 p-2 rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700"/>
+                </div>
+                <button id="save-data-btn" class="button w-full mt-6">データを.txtに保存</button>
+            </div>
+
+            <!-- 中央パネル: ビデオビュー、コントロール、タイムライン -->
+            <div class="center-panel resizable" id="center-panel">
+                <div class="video-container">
+                    <video id="video-player" controls class="rounded-xl shadow-lg">
+                        お使いのブラウザはビデオタグをサポートしていません。
+                    </video>
+                </div>
+
+                <div class="controls-timeline-area">
+                    <!-- ビデオコントロール -->
+                    <div class="flex justify-center gap-4 mb-4">
+                        <button id="play-pause-btn" class="button">再生</button>
+                        <button id="mark-checkpoint-btn" class="button">チェックポイントをマーク</button>
+                    </div>
+
+                    <!-- フレームのタイムライン -->
+                    <h3 class="text-lg font-semibold mb-2 text-indigo-300">タイムライン</h3>
+                    <div class="timeline" id="timeline-container">
+                        <div class="timeline-progress" id="timeline-progress"></div>
+                        <!-- チェックポイントマーカーはJSによってここに追加されます -->
+                    </div>
+                </div>
+
+                <!-- 動作マトリックス -->
+                <div class="controls-timeline-area"> <!-- 一貫性のためにスタイリングクラスを再利用 -->
+                    <h2 class="text-xl font-semibold mb-4 text-indigo-300">動作マトリックス</h2>
+                    <div id="segment-matrix-container" class="max-h-60 overflow-y-auto pr-2">
+                        <table id="segment-matrix-table" class="min-w-full bg-gray-700 rounded-lg shadow-md text-sm">
+                            <thead>
+                                <tr class="bg-gray-600 text-gray-200 uppercase text-left">
+                                    <th class="py-2 px-3">動作名</th>
+                                    <!-- 開始/終了ペアの列は動的に追加されます -->
+                                </tr>
+                            </thead>
+                            <tbody id="segment-matrix-tbody">
+                                <!-- 行は動的に追加されます -->
+                            </tbody>
+                        </table>
+                        <p id="no-segments-matrix-message" class="text-gray-400 text-sm text-center w-full mt-4">マトリックスに表示する動作がありません。</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右パネル: チェックポイント時間と計算 -->
+            <div class="right-panel resizable" id="right-panel">
+                <h2 class="text-xl font-semibold mb-4 text-indigo-300">チェックポイント</h2>
+                <div id="checkpoints-list" class="mb-6 max-h-40 overflow-y-auto pr-2">
+                    <!-- チェックポイントはここにリストされます -->
+                    <p class="text-gray-400 text-sm">まだチェックポイントが追加されていません。</p>
+                </div>
+
+                <h2 class="text-xl font-semibold mb-4 text-indigo-300">時間差を計算</h2>
+                <div class="mb-4">
+                    <label for="checkpoint1-select" class="block text-sm font-medium text-gray-300 mb-2">チェックポイント 1:</label>
+                    <select id="checkpoint1-select" class="w-full p-2 rounded-lg bg-gray-700 border border-gray-600 text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="">-- 選択 --</option>
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <label for="checkpoint2-select" class="block text-sm font-medium text-gray-300 mb-2">チェックポイント 2:</label>
+                    <select id="checkpoint2-select" class="w-full p-2 rounded-lg bg-gray-700 border border-gray-600 text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="">-- 選択 --</option>
+                    </select>
+                </div>
+                <button id="calculate-time-btn" class="button w-full mb-4">差を計算</button>
+                <div id="time-difference-result" class="p-3 rounded-lg bg-gray-700 text-center font-bold text-lg text-green-400">
+                    差: 00:00:00
+                </div>
+
+                <h2 class="text-xl font-semibold mt-6 mb-4 text-indigo-300">名前付き動作</h2>
+                <div class="mb-4">
+                    <label for="segment-start-select" class="block text-sm font-medium text-gray-300 mb-2">開始チェックポイント:</label>
+                    <select id="segment-start-select" class="w-full p-2 rounded-lg bg-gray-700 border border-gray-600 text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="">-- 選択 --</option>
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <label for="segment-end-select" class="block text-sm font-medium text-gray-300 mb-2">終了チェックポイント:</label>
+                    <select id="segment-end-select" class="w-full p-2 rounded-lg bg-gray-700 border border-gray-600 text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="">-- 選択 --</option>
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <label for="segment-name-input" class="block text-sm font-medium text-gray-300 mb-2">動作名:</label>
+                    <input type="text" id="segment-name-input" placeholder="例: イントロ、メインアクション" class="w-full p-2 rounded-lg bg-gray-700 border border-gray-600 text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+                </div>
+                <button id="add-segment-btn" class="button w-full mb-4">名前付き動作を追加</button>
+                <div id="named-segments-list" class="max-h-40 overflow-y-auto pr-2">
+                    <p class="text-gray-400 text-sm">まだ名前付き動作がありません。</p>
+                </div>
+
+                <h2 class="text-xl font-semibold mt-6 mb-4 text-indigo-300">動作時間グラフ</h2>
+                <div id="segment-durations-graph" class="graph-container">
+                    <p class="text-gray-400 text-sm text-center w-full">グラフ化する動作がありません。</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- カスタムメッセージモーダル -->
+    <div id="message-modal" class="modal">
+        <div class="modal-content">
+            <h3 id="modal-title" class="text-2xl font-bold mb-4 text-indigo-400"></h3>
+            <p id="modal-message" class="text-gray-200 mb-6"></p>
+            <button id="modal-close-btn" class="modal-close-button">閉じる</button>
+        </div>
+    </div>
+
+    <script>
+        const videoPlayer = document.getElementById('video-player');
+        const playPauseBtn = document.getElementById('play-pause-btn');
+        const markCheckpointBtn = document.getElementById('mark-checkpoint-btn');
+        const checkpointsList = document.getElementById('checkpoints-list');
+        const checkpoint1Select = document.getElementById('checkpoint1-select');
+        const checkpoint2Select = document.getElementById('checkpoint2-select');
+        const calculateTimeBtn = document.getElementById('calculate-time-btn');
+        const timeDifferenceResult = document.getElementById('time-difference-result');
+        const timelineProgress = document.getElementById('timeline-progress');
+        const timelineContainer = document.getElementById('timeline-container');
+        const videoSelect = document.getElementById('video-select');
+        const loadVideoBtn = document.getElementById('load-video-btn');
+        const localVideoInput = document.getElementById('local-video-input');
+
+        const segmentStartSelect = document.getElementById('segment-start-select');
+        const segmentEndSelect = document.getElementById('segment-end-select');
+        const segmentNameInput = document.getElementById('segment-name-input');
+        const addSegmentBtn = document.getElementById('add-segment-btn');
+        const namedSegmentsList = document.getElementById('named-segments-list');
+        const segmentDurationsGraph = document.getElementById('segment-durations-graph');
+        const segmentMatrixTbody = document.getElementById('segment-matrix-tbody');
+        const segmentMatrixTheadRow = document.querySelector('#segment-matrix-table thead tr');
+        const noSegmentsMatrixMessage = document.getElementById('no-segments-matrix-message');
+
+        const saveDataBtn = document.getElementById('save-data-btn');
+        const loadDataInput = document.getElementById('load-data-input');
+
+        const messageModal = document.getElementById('message-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalMessage = document.getElementById('modal-message');
+        const modalCloseBtn = document.getElementById('modal-close-btn');
+
+        let checkpoints = [];
+        let checkpointCounter = 0;
+        let namedSegments = [];
+        let segmentCounter = 0;
+        let currentVideoName = '';
+
+        // ヘルパー関数: 時間をフォーマット (秒からHH:MM:SSへ)
+        function formatTime(seconds) {
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            const s = Math.floor(seconds % 60);
+            return [h, m, s]
+                .map(v => v < 10 ? '0' + v : v)
+                .join(':');
+        }
+
+        // ヘルパー関数: 時間をパース (HH:MM:SSから秒へ)
+        function parseTime(timeString) {
+            const parts = timeString.split(':').map(Number);
+            if (parts.length === 3) {
+                return parts[0] * 3600 + parts[1] * 60 + parts[2];
+            }
+            return 0; // 無効なフォーマット
+        }
+
+        // カスタムモーダルを表示する関数
+        function showModal(title, message) {
+            modalTitle.textContent = title;
+            modalMessage.textContent = message;
+            messageModal.style.display = 'flex';
+        }
+
+        // モーダル閉じるボタンのイベントリスナー
+        modalCloseBtn.addEventListener('click', () => {
+            messageModal.style.display = 'none';
+        });
+
+        // 再生/一時停止機能
+        playPauseBtn.addEventListener('click', () => {
+            if (!videoPlayer.src) {
+                showModal('ビデオが読み込まれていません', 'まずビデオを読み込んでください。');
+                return;
+            }
+            if (videoPlayer.paused) {
+                videoPlayer.play();
+                playPauseBtn.textContent = '一時停止';
+            } else {
+                videoPlayer.pause();
+                playPauseBtn.textContent = '再生';
+            }
+        });
+
+        // チェックポイントをマークする機能
+        markCheckpointBtn.addEventListener('click', () => {
+            if (!videoPlayer.src) {
+                showModal('ビデオが読み込まれていません', 'まずビデオを読み込んでください。');
+                return;
+            }
+            const currentTime = videoPlayer.currentTime;
+            const formattedTime = formatTime(currentTime);
+            checkpointCounter++;
+            const checkpointId = `cp-${checkpointCounter}`;
+
+            const newCheckpoint = {
+                id: checkpointId,
+                time: currentTime,
+                formattedTime: formattedTime
+            };
+            checkpoints.push(newCheckpoint);
+            checkpoints.sort((a, b) => a.time - b.time);
+
+            renderCheckpoints();
+            renderTimelineMarkers();
+            showModal('チェックポイント追加済み', `チェックポイントが ${formattedTime} にマークされました。`);
+        });
+
+        // チェックポイントのリストをレンダリングし、選択ドロップダウンを更新する
+        function renderCheckpoints() {
+            checkpointsList.innerHTML = '';
+            checkpoint1Select.innerHTML = '<option value="">-- 選択 --</option>';
+            checkpoint2Select.innerHTML = '<option value="">-- 選択 --</option>';
+            segmentStartSelect.innerHTML = '<option value="">-- 選択 --</option>';
+            segmentEndSelect.innerHTML = '<option value="">-- 選択 --</option>';
+
+            if (checkpoints.length === 0) {
+                checkpointsList.innerHTML = '<p class="text-gray-400 text-sm">まだチェックポイントが追加されていません。</p>';
+                return;
+            }
+
+            checkpoints.forEach(cp => {
+                const listItem = document.createElement('div');
+                listItem.className = 'list-item cursor-pointer hover:bg-gray-600';
+                listItem.dataset.checkpointId = cp.id;
+                listItem.innerHTML = `
+                    <span>${cp.formattedTime}</span>
+                    <button class="text-red-400 hover:text-red-600 font-bold text-sm delete-checkpoint-btn" data-id="${cp.id}">
+                        &times;
+                    </button>
+                `;
+                checkpointsList.appendChild(listItem);
+
+                const option1 = document.createElement('option');
+                option1.value = cp.time;
+                option1.textContent = cp.formattedTime;
+                checkpoint1Select.appendChild(option1);
+
+                const option2 = document.createElement('option');
+                option2.value = cp.time;
+                option2.textContent = cp.formattedTime;
+                checkpoint2Select.appendChild(option2);
+
+                const optionStart = document.createElement('option');
+                optionStart.value = cp.time;
+                optionStart.textContent = cp.formattedTime;
+                segmentStartSelect.appendChild(optionStart);
+
+                const optionEnd = document.createElement('option');
+                optionEnd.value = cp.time;
+                optionEnd.textContent = cp.formattedTime;
+                segmentEndSelect.appendChild(optionEnd);
+            });
+
+            document.querySelectorAll('.delete-checkpoint-btn').forEach(button => {
+                button.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    const idToDelete = event.target.dataset.id;
+                    checkpoints = checkpoints.filter(cp => cp.id !== idToDelete);
+                    namedSegments = namedSegments.filter(segment =>
+                        segment.startId !== idToDelete && segment.endId !== idToDelete
+                    );
+                    renderCheckpoints();
+                    renderTimelineMarkers();
+                    renderNamedSegments();
+                    renderSegmentDurationsGraph();
+                    renderSegmentMatrix(); // マトリックスを更新
+                    timeDifferenceResult.textContent = '差: 00:00:00';
+                    showModal('チェックポイント削除済み', `チェックポイント ${idToDelete} が削除されました。`);
+                });
+            });
+        }
+
+        // 時間差を計算
+        calculateTimeBtn.addEventListener('click', () => {
+            const time1 = parseFloat(checkpoint1Select.value);
+            const time2 = parseFloat(checkpoint2Select.value);
+
+            if (isNaN(time1) || isNaN(time2)) {
+                showModal('選択エラー', '差を計算するには2つのチェックポイントを選択してください。');
+                timeDifferenceResult.textContent = '差: 00:00:00';
+                return;
+            }
+
+            const difference = Math.abs(time2 - time1);
+            timeDifferenceResult.textContent = `差: ${formatTime(difference)}`;
+        });
+
+        // ビデオの再生中にタイムラインの進行状況とマーカーを更新する
+        videoPlayer.addEventListener('timeupdate', () => {
+            if (videoPlayer.duration) {
+                const progress = (videoPlayer.currentTime / videoPlayer.duration) * 100;
+                timelineProgress.style.width = `${progress}%`;
+            }
+        });
+
+        // タイムラインクリックでビデオをシーク
+        timelineContainer.addEventListener('click', (e) => {
+            if (!videoPlayer.src) {
+                showModal('ビデオが読み込まれていません', 'タイムラインでシークするには、まずビデオを読み込んでください。');
+                return;
+            }
+            const timelineRect = timelineContainer.getBoundingClientRect();
+            const clickX = e.clientX - timelineRect.left;
+            const percentage = clickX / timelineRect.width;
+            videoPlayer.currentTime = videoPlayer.duration * percentage;
+        });
+
+        // タイムラインにチェックポイントマーカーをレンダリングする
+        function renderTimelineMarkers() {
+            // 既存のマーカーを削除し、プログレスバーは残す
+            Array.from(timelineContainer.children).forEach(child => {
+                if (child.classList.contains('timeline-checkpoint')) {
+                    child.remove();
+                }
+            });
+
+
+            // ビデオの長さが利用可能で、チェックポイントがある場合にのみレンダリング
+            if (!videoPlayer.duration || checkpoints.length === 0) {
+                return;
+            }
+
+            checkpoints.forEach(cp => {
+                const marker = document.createElement('div');
+                marker.className = 'timeline-checkpoint';
+                const position = (cp.time / videoPlayer.duration) * 100;
+                marker.style.left = `${position}%`;
+                marker.title = `チェックポイント: ${cp.formattedTime}`;
+                // チェックポイントにジャンプするクリックリスナーを追加
+                marker.addEventListener('click', (event) => {
+                    event.stopPropagation(); // タイムラインのクリックイベントの発火を防ぐ
+                    videoPlayer.currentTime = cp.time;
+                    showModal('チェックポイントにジャンプ', `ビデオが ${cp.formattedTime} にジャンプしました。`);
+                });
+                timelineContainer.appendChild(marker);
+            });
+        }
+
+        // ビデオのメタデータが読み込まれたとき (長さが利用可能になったとき)
+        videoPlayer.addEventListener('loadedmetadata', () => {
+            // このイベントリスナーは、ビデオの長さに依存する要素や、新しいビデオが読み込まれたときにリセットする必要がある要素を再レンダリングするために重要です。
+            // ビデオが読み込まれたとき (サンプルまたはローカルから)、現在の状態 (新しいビデオの場合は空、TXTから読み込まれた場合は入力済み) を反映するためにすべてを再レンダリングする必要があります。
+            renderCheckpoints(); // チェックポイントを再レンダリング (新しいビデオの場合は空、TXTから読み込まれた場合は入力済み)
+            renderTimelineMarkers(); // 新しいビデオの長さに基づいてタイムラインマーカーを再レンダリング
+            renderNamedSegments(); // 動作を再レンダリング (新しいビデオの場合は空、TXTから読み込まれた場合は入力済み)
+            renderSegmentDurationsGraph(); // グラフを再レンダリング
+            renderSegmentMatrix(); // マトリックスを再レンダリング
+            timeDifferenceResult.textContent = '差: 00:00:00';
+            playPauseBtn.textContent = '再生';
+        });
+
+        // ドロップダウンからビデオを読み込む
+        loadVideoBtn.addEventListener('click', () => {
+            const selectedVideoUrl = videoSelect.value;
+            if (selectedVideoUrl) {
+                videoPlayer.src = selectedVideoUrl;
+                videoPlayer.load();
+                currentVideoName = selectedVideoUrl;
+                showModal('ビデオ読み込み済み', 'ビデオの準備ができました。');
+                localVideoInput.value = '';
+                // 永続性を維持するために、ここでチェックポイントや名前付き動作をクリアしない
+            } else {
+                showModal('ビデオが選択されていません', 'リストからビデオを選択してください。');
+            }
+        });
+
+        // ローカルファイル入力からビデオを読み込む
+        localVideoInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const fileURL = URL.createObjectURL(file);
+                videoPlayer.src = fileURL;
+                videoPlayer.load();
+                currentVideoName = file.name;
+                showModal('ローカルビデオ読み込み済み', `"${file.name}" の準備ができました。`);
+                videoSelect.value = '';
+                // 永続性を維持するために、ここでチェックポイントや名前付き動作をクリアしない
+            } else {
+                showModal('ファイルが選択されていません', 'ローカルフォルダからビデオファイルを選択してください。');
+            }
+        });
+
+        // 名前付き動作を追加する機能
+        addSegmentBtn.addEventListener('click', () => {
+            const startCheckpointTime = parseFloat(segmentStartSelect.value);
+            const endCheckpointTime = parseFloat(segmentEndSelect.value);
+            const segmentName = segmentNameInput.value.trim();
+
+            if (isNaN(startCheckpointTime) || isNaN(endCheckpointTime) || !segmentName) {
+                showModal('入力エラー', '開始チェックポイントと終了チェックポイントの両方を選択し、動作名を入力してください。');
+                return;
+            }
+
+            if (startCheckpointTime === endCheckpointTime) {
+                showModal('入力エラー', '開始チェックポイントと終了チェックポイントは同じにできません。');
+                return;
+            }
+
+            const start = Math.min(startCheckpointTime, endCheckpointTime);
+            const end = Math.max(startCheckpointTime, endCheckpointTime);
+            const duration = end - start;
+
+            segmentCounter++;
+            const segmentId = `seg-${segmentCounter}`;
+
+            const newSegment = {
+                id: segmentId,
+                name: segmentName,
+                start: start,
+                end: end,
+                formattedStart: formatTime(start),
+                formattedEnd: formatTime(end),
+                duration: duration,
+                formattedDuration: formatTime(duration),
+                startId: checkpoints.find(cp => cp.time === startCheckpointTime).id,
+                endId: checkpoints.find(cp => cp.time === endCheckpointTime).id
+            };
+            namedSegments.push(newSegment);
+            namedSegments.sort((a, b) => a.start - b.start);
+
+            renderNamedSegments();
+            renderSegmentDurationsGraph();
+            renderSegmentMatrix();
+            segmentNameInput.value = '';
+            segmentStartSelect.value = '';
+            segmentEndSelect.value = '';
+            showModal('動作追加済み', `名前付き動作「${segmentName}」が ${formatTime(start)} から ${formatTime(end)} まで追加されました。`);
+        });
+
+        // 名前付き動作のリストをレンダリングする
+        function renderNamedSegments() {
+            namedSegmentsList.innerHTML = '';
+
+            if (namedSegments.length === 0) {
+                namedSegmentsList.innerHTML = '<p class="text-gray-400 text-sm">まだ名前付き動作がありません。</p>';
+                return;
+            }
+
+            namedSegments.forEach(segment => {
+                const listItem = document.createElement('div');
+                listItem.className = 'list-item flex-col items-start cursor-pointer hover:bg-gray-600';
+                listItem.innerHTML = `
+                    <div class="w-full flex justify-between items-center mb-1">
+                        <span class="font-bold text-lg">${segment.name}</span>
+                        <button class="text-red-400 hover:text-red-600 font-bold text-sm delete-segment-btn" data-id="${segment.id}">
+                            &times;
+                        </button>
+                    </div>
+                    <span class="text-sm text-gray-300">${segment.formattedStart} - ${segment.formattedEnd} (期間: ${segment.formattedDuration})</span>
+                `;
+                namedSegmentsList.appendChild(listItem);
+            });
+
+            document.querySelectorAll('.delete-segment-btn').forEach(button => {
+                button.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    const idToDelete = event.target.dataset.id;
+                    namedSegments = namedSegments.filter(segment => segment.id !== idToDelete);
+                    renderNamedSegments();
+                    renderSegmentDurationsGraph();
+                    renderSegmentMatrix();
+                    showModal('動作削除済み', `名前付き動作が削除されました。`);
+                });
+            });
+        }
+
+        // 動作時間のシンプルな棒グラフをレンダリングする (名前でグループ化)
+        function renderSegmentDurationsGraph() {
+            segmentDurationsGraph.innerHTML = '';
+
+            if (namedSegments.length === 0) {
+                segmentDurationsGraph.innerHTML = '<p class="text-gray-400 text-sm text-center w-full">グラフ化する動作がありません。</p>';
+                return;
+            }
+
+            const groupedDurations = new Map();
+            namedSegments.forEach(segment => {
+                if (!groupedDurations.has(segment.name)) {
+                    groupedDurations.set(segment.name, []);
+                }
+                groupedDurations.get(segment.name).push(segment.duration);
+            });
+
+            const graphData = Array.from(groupedDurations.entries()).map(([name, durations]) => ({
+                name: name,
+                durations: durations.sort((a, b) => a - b)
+            }));
+
+            const allDurations = namedSegments.map(s => s.duration);
+            const maxOverallDuration = allDurations.length > 0 ? Math.max(...allDurations) : 1;
+
+            const maxGraphHeight = 120;
+
+            graphData.forEach(group => {
+                const groupContainer = document.createElement('div');
+                groupContainer.className = 'flex flex-col items-center mx-2';
+
+                const groupLabel = document.createElement('div');
+                groupLabel.className = 'text-sm font-bold text-indigo-300 mb-2';
+                groupLabel.textContent = group.name;
+                groupContainer.appendChild(groupLabel);
+
+                const barsWrapper = document.createElement('div');
+                barsWrapper.className = 'flex items-end justify-center gap-1';
+
+                group.durations.forEach((duration, index) => {
+                    const bar = document.createElement('div');
+                    bar.className = 'graph-bar';
+                    const barHeight = (duration / maxOverallDuration) * maxGraphHeight;
+                    bar.style.height = `${Math.max(barHeight, 5)}px`; // 最小高さを確保
+                    bar.title = `${group.name} インスタンス ${index + 1}: ${formatTime(duration)}`;
+
+                    bar.innerHTML = `
+                        <span class="graph-bar-value">${formatTime(duration)}</span>
+                    `;
+                    barsWrapper.appendChild(bar);
+                });
+                groupContainer.appendChild(barsWrapper);
+                segmentDurationsGraph.appendChild(groupContainer);
+            });
+        }
+
+        // 動作マトリックス表をレンダリングする
+        function renderSegmentMatrix() {
+            segmentMatrixTbody.innerHTML = '';
+            // 最初のヘッダー (動作名) 以外をすべてクリア
+            const currentTheadRow = document.querySelector('#segment-matrix-table thead tr');
+            while (currentTheadRow.children.length > 1) {
+                currentTheadRow.removeChild(currentTheadRow.lastChild);
+            }
+
+            if (namedSegments.length === 0) {
+                noSegmentsMatrixMessage.style.display = 'block';
+                return;
+            } else {
+                noSegmentsMatrixMessage.style.display = 'none';
+            }
+
+            // 動作を名前でグループ化
+            const segmentsByName = new Map();
+            namedSegments.forEach(segment => {
+                if (!segmentsByName.has(segment.name)) {
+                    segmentsByName.set(segment.name, []);
+                }
+                segmentsByName.get(segment.name).push(segment);
+            });
+
+            // 必要な列の最大数を決定 (任意の動作名の最大インスタンス数)
+            let maxInstances = 0;
+            segmentsByName.forEach(segments => {
+                maxInstances = Math.max(maxInstances, segments.length);
+            });
+
+            // 開始/終了/期間ペアの動的ヘッダーを追加
+            for (let i = 0; i < maxInstances; i++) {
+                const thStart = document.createElement('th');
+                thStart.className = 'py-2 px-3';
+                thStart.textContent = `開始 ${i + 1}`;
+                currentTheadRow.appendChild(thStart);
+
+                const thEnd = document.createElement('th');
+                thEnd.className = 'py-2 px-3';
+                thEnd.textContent = `終了 ${i + 1}`;
+                currentTheadRow.appendChild(thEnd);
+
+                const thDuration = document.createElement('th');
+                thDuration.className = 'py-2 px-3';
+                thDuration.textContent = `期間 ${i + 1}`;
+                currentTheadRow.appendChild(thDuration);
+            }
+
+            // 表の行を埋める
+            segmentsByName.forEach((segments, name) => {
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-gray-600 hover:bg-gray-600';
+
+                const tdName = document.createElement('td');
+                tdName.className = 'py-2 px-3 font-semibold';
+                tdName.textContent = name;
+                tr.appendChild(tdName);
+
+                for (let i = 0; i < maxInstances; i++) {
+                    const segment = segments[i];
+                    const tdStart = document.createElement('td');
+                    tdStart.className = 'py-2 px-3 text-gray-300';
+                    tdStart.textContent = segment ? segment.formattedStart : '-';
+                    tr.appendChild(tdStart);
+
+                    const tdEnd = document.createElement('td');
+                    tdEnd.className = 'py-2 px-3 text-gray-300';
+                    tdEnd.textContent = segment ? segment.formattedEnd : '-';
+                    tr.appendChild(tdEnd);
+
+                    const tdDuration = document.createElement('td');
+                    tdDuration.className = 'py-2 px-3 text-gray-300';
+                    tdDuration.textContent = segment ? segment.formattedDuration : '-';
+                    tr.appendChild(tdDuration);
+                }
+                segmentMatrixTbody.appendChild(tr);
+            });
+        }
+
+
+        // データを.txtファイルに保存
+        saveDataBtn.addEventListener('click', () => {
+            if (!currentVideoName) {
+                showModal('ビデオが読み込まれていません', 'データを保存する前にビデオを読み込んでください。');
+                return;
+            }
+
+            let fileContent = `Video Path: ${currentVideoName}\n\n`;
+
+            fileContent += 'Checkpoints:\n';
+            if (checkpoints.length === 0) {
+                fileContent += 'チェックポイントは記録されていません。\n';
+            } else {
+                checkpoints.forEach(cp => {
+                    fileContent += `  ${cp.id}: ${cp.formattedTime} (${cp.time.toFixed(2)}s)\n`;
+                });
+            }
+            fileContent += '\n';
+
+            fileContent += 'Named Segments:\n';
+            if (namedSegments.length === 0) {
+                fileContent += '名前付き動作は記録されていません。\n';
+            } else {
+                namedSegments.forEach(segment => {
+                    fileContent += `  ${segment.id}: ${segment.name} (開始: ${segment.formattedStart}, 終了: ${segment.formattedEnd}) 期間: ${segment.formattedDuration} (${segment.duration.toFixed(2)}s)\n`;
+                });
+            }
+
+            const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${currentVideoName.split('/').pop().split('.')[0] || 'video_data'}_checkpoints.txt`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+
+            showModal('データ保存済み', 'チェックポイントと名前付き動作がテキストファイルに保存されました。');
+        });
+
+        // .txtファイルからデータを読み込む
+        loadDataInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) {
+                showModal('ファイルが選択されていません', 'データを読み込む.txtファイルを選択してください。');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const content = e.target.result;
+                try {
+                    parseAndLoadData(content);
+                    showModal('データ読み込み済み', `"${file.name}" からデータが正常に読み込まれました。`);
+                } catch (error) {
+                    showModal('読み込みエラー', `データの読み込みに失敗しました: ${error.message}。ファイル形式が正しいことを確認してください。`);
+                    console.error("読み込まれたデータの解析エラー:", error);
+                    // 解析に失敗した場合は、一貫性のない状態を避けるためにデータをリセット
+                    checkpoints = [];
+                    namedSegments = [];
+                    checkpointCounter = 0;
+                    segmentCounter = 0;
+                    currentVideoName = '';
+                    // クリアされた状態を反映するためにUIを再レンダリング
+                    renderCheckpoints();
+                    renderNamedSegments();
+                    renderTimelineMarkers();
+                    renderSegmentDurationsGraph();
+                    renderSegmentMatrix();
+                    timeDifferenceResult.textContent = '差: 00:00:00';
+                }
+            };
+            reader.onerror = () => {
+                showModal('ファイル読み取りエラー', 'ファイルの読み取りに失敗しました。');
+            };
+            reader.readAsText(file);
+        });
+
+        function parseAndLoadData(content) {
+            // 状態をリセット
+            checkpoints = [];
+            namedSegments = [];
+            checkpointCounter = 0;
+            segmentCounter = 0;
+
+            const lines = content.split('\n');
+            let section = '';
+
+            lines.forEach(line => {
+                line = line.trim();
+                if (line.startsWith('Video Path:')) {
+                    currentVideoName = line.replace('Video Path:', '').trim();
+                    // オプションでURLであればビデオを読み込む
+                    if (currentVideoName.startsWith('http')) {
+                        videoPlayer.src = currentVideoName;
+                        videoPlayer.load();
+                    } else {
+                        // ローカルファイルの場合、ユーザーは再選択する必要がある
+                        videoPlayer.src = '';
+                        // showModal('注意', `ローカルビデオ「${currentVideoName}」は自動的に再読み込みできません。手動で読み込んでください。`);
+                    }
+                } else if (line === 'Checkpoints:') {
+                    section = 'checkpoints';
+                } else if (line === 'Named Segments:') {
+                    section = 'named_segments';
+                } else if (line.length === 0) {
+                    // 空行をスキップ
+                } else if (section === 'checkpoints') {
+                    // 例: cp-1: 00:00:05 (5.12s)
+                    const match = line.match(/^cp-(\d+):\s(\d{2}:\d{2}:\d{2})\s\((\d+\.\d+)s\)$/);
+                    if (match) {
+                        const idNum = parseInt(match[1]);
+                        const formattedTime = match[2];
+                        const time = parseFloat(match[3]);
+                        checkpoints.push({
+                            id: `cp-${idNum}`,
+                            time: time,
+                            formattedTime: formattedTime
+                        });
+                        checkpointCounter = Math.max(checkpointCounter, idNum);
+                    }
+                } else if (section === 'named_segments') {
+                    // 例: seg-1: Intro (Start: 00:00:00, End: 00:00:05) Duration: 00:00:05 (5.12s)
+                    const match = line.match(/^seg-(\d+):\s(.+)\s\(Start:\s(\d{2}:\d{2}:\d{2}),\sEnd:\s(\d{2}:\d{2}:\d{2})\)\sDuration:\s(\d{2}:\d{2}:\d{2})\s\((\d+\.\d+)s\)$/);
+                    if (match) {
+                        const idNum = parseInt(match[1]);
+                        const name = match[2];
+                        const formattedStart = match[3];
+                        const formattedEnd = match[4];
+                        const duration = parseFloat(match[6]);
+
+                        // formattedStartとformattedEndから開始時間と終了時間を再構築
+                        const start = parseTime(formattedStart);
+                        const end = parseTime(formattedEnd);
+
+                        namedSegments.push({
+                            id: `seg-${idNum}`,
+                            name: name,
+                            start: start,
+                            end: end,
+                            formattedStart: formattedStart,
+                            formattedEnd: formattedEnd,
+                            duration: duration,
+                            formattedDuration: match[5],
+                            startId: '', // テキストファイルから復元できないため、空文字列
+                            endId: ''    // テキストファイルから復元できないため、空文字列
+                        });
+                        segmentCounter = Math.max(segmentCounter, idNum);
+                    }
+                }
+            });
+
+            checkpoints.sort((a, b) => a.time - b.time);
+            namedSegments.sort((a, b) => a.start - b.start);
+
+            // データを解析した後にレンダリング関数を明示的に呼び出す
+            // これらは読み込まれたデータでUIを更新します。
+            renderCheckpoints();
+            renderNamedSegments();
+            renderTimelineMarkers(); // 新しく読み込まれたチェックポイントを使用します
+            renderSegmentDurationsGraph();
+            renderSegmentMatrix();
+            timeDifferenceResult.textContent = '差: 00:00:00';
+        }
+
+        // サイズ変更可能な機能の初期化
+        $(function() {
+            $("#left-panel").resizable({
+                handles: "e", // 東 (右) ハンドルでサイズ変更
+                minWidth: 200,
+                stop: function(event, ui) {
+                    // サイズ変更停止時にグリッド列を調整
+                    const leftWidth = ui.size.width;
+                    const mainContent = $('.main-content');
+
+                    // すべてのパネルの現在の計算済み幅を取得して、比率または値を維持する
+                    const centerPanel = $('#center-panel');
+                    const rightPanel = $('#right-panel');
+
+                    // グリッドの利用可能な全幅を計算 (main-contentのコンテンツ幅)
+                    const totalGridWidth = mainContent.width(); // これは現在ボディ幅の95%
+                    const gap = parseFloat(mainContent.css('gap')) * 2; // 2つのギャップを想定
+
+                    // 残りのスペースを動的に再分配
+                    const currentCenterWidth = centerPanel.width();
+                    const currentRightWidth = rightPanel.width();
+                    const totalCurrentWidth = leftWidth + currentCenterWidth + currentRightWidth + gap;
+
+                    // 必要に応じて中央と右を比例して調整するか、単にCSSグリッドに'fr'単位を処理させる
+                    // 'fr'単位を使用したよりシンプルなアプローチの場合:
+                    const remainingWidth = totalGridWidth - leftWidth - gap;
+                    const newCenterFr = (currentCenterWidth / (currentCenterWidth + currentRightWidth)) * remainingWidth;
+                    const newRightFr = (currentRightWidth / (currentCenterWidth + currentRightWidth)) * remainingWidth;
+
+                    mainContent.css('grid-template-columns', `${leftWidth}px ${newCenterFr > 0 ? newCenterFr : '1fr'}px ${newRightFr > 0 ? newRightFr : '1fr'}px`);
+                }
+            });
+
+            $("#right-panel").resizable({
+                handles: "w", // 西 (左) ハンドルでサイズ変更
+                minWidth: 200,
+                stop: function(event, ui) {
+                    // サイズ変更停止時にグリッド列を調整
+                    const rightWidth = ui.size.width;
+                    const mainContent = $('.main-content');
+
+                    const leftPanel = $('#left-panel');
+                    const centerPanel = $('#center-panel');
+
+                    const totalGridWidth = mainContent.width();
+                    const gap = parseFloat(mainContent.css('gap')) * 2;
+
+                    const currentLeftWidth = leftPanel.width();
+                    const currentCenterWidth = centerPanel.width();
+                    const totalCurrentWidth = currentLeftWidth + currentCenterWidth + rightWidth + gap;
+
+                    const remainingWidth = totalGridWidth - rightWidth - gap;
+                    const newLeftFr = (currentLeftWidth / (currentLeftWidth + currentCenterWidth)) * remainingWidth;
+                    const newCenterFr = (currentCenterWidth / (currentLeftWidth + currentCenterWidth)) * remainingWidth;
+
+                    mainContent.css('grid-template-columns', `${newLeftFr > 0 ? newLeftFr : '1fr'}px ${newCenterFr > 0 ? newCenterFr : '1fr'}px ${rightWidth}px`);
+                }
+            });
+
+            // 中央パネルを高さでサイズ変更可能にする (ビデオ、タイムラインなどの内部要素に影響を与えるため)
+            // 注: 中央パネルの水平方向のサイズ変更は、左/右パネルのサイズ変更によって間接的に処理されます
+            $("#center-panel").resizable({
+                handles: "s", // 南 (下) ハンドルで垂直方向のサイズ変更
+                minHeight: 300 // 中央パネルの最小高さ
+            });
+        });
+
+
+        // チェックポイント、名前付き動作、グラフの初期レンダリング (空)
+        renderCheckpoints();
+        renderNamedSegments();
+        renderSegmentDurationsGraph();
+        renderSegmentMatrix();
+    </script>
+</body>
+</html>
